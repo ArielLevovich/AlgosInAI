@@ -10,13 +10,19 @@ public class BayesQueryHandler {
     private List<String> variableEliminationQueries;
     private FileWriter fileWriter;
 
-    public BayesQueryHandler(String xmlFilePath, String inputFile, String outputFile) throws IOException {
+    public BayesQueryHandler(String inputFile) throws IOException {
         this.bayesianBallQueries = new ArrayList<>();
         this.variableEliminationQueries = new ArrayList<>();
+        String xmlFilePath = getXmlFilePath(inputFile);
         this.network = parseNetworkFromXML(xmlFilePath);
         this.network.initialize();
         parseInputFile(inputFile);
-        fileWriter = new FileWriter(outputFile);
+        fileWriter = new FileWriter("output.txt");
+    }
+
+    private String getXmlFilePath(String inputFile) throws IOException {
+        BufferedReader file = new BufferedReader(new FileReader(inputFile));
+        return file.readLine(); // return the first line
     }
 
     public BayesNet getNetwork() {

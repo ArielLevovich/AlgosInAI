@@ -1,11 +1,11 @@
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Map;
 
 public class Ex1 {
     public static void main(String[] args) {
         try {
-            BayesQueryHandler bayesQueryHandler = new BayesQueryHandler("alarm_net.xml", "input.txt", "output.txt");
+            // args[1] should be the input text file if specified.
+            String inputFile = args.length > 1 ? args[1] : "input.txt";
+            BayesQueryHandler bayesQueryHandler = new BayesQueryHandler(inputFile);
 
             bayesQueryHandler.handleBayesianBallQueries();
             bayesQueryHandler.handleVariableEliminationQueries();
