@@ -1,16 +1,22 @@
-import org.w3c.dom.*;
-import javax.xml.parsers.*;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.NodeList;
+
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.*;
-import java.util.*;
-import org.xml.sax.SAXException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Optional;
 
 public class BayesQueryHandler {
-    private BayesNet network;
-    private List<String> bayesianBallQueries;
-    private List<String> variableEliminationQueries;
-    private FileWriter fileWriter;
+    private final BayesNet network;
+    private final List<String> bayesianBallQueries;
+    private final List<String> variableEliminationQueries;
+    private final FileWriter fileWriter;
 
-    public BayesQueryHandler(String inputFile) throws IOException {
+    public BayesQueryHandler(String inputFile) throws IOException, RuntimeException {
         this.bayesianBallQueries = new ArrayList<>();
         this.variableEliminationQueries = new ArrayList<>();
         String xmlFilePath = getXmlFilePath(inputFile);
@@ -29,7 +35,7 @@ public class BayesQueryHandler {
         return network;
     }
 
-    private BayesNet parseNetworkFromXML(String xmlFilePath) {
+    private BayesNet parseNetworkFromXML(String xmlFilePath) throws RuntimeException {
         BayesNet network = new BayesNet();
         try {
             File xmlFile = new File(xmlFilePath);
@@ -48,7 +54,8 @@ public class BayesQueryHandler {
                 for (int j = 0; j < outcomeList.getLength(); j++) {
                     outcomes.add(outcomeList.item(j).getTextContent());
                 }
-                network.variables.put(name, outcomes);
+                Variable variable = new Variable(name, outcomes);
+                network.variables.add(variable);
             }
 
             // Parse definitions (CPTs)
@@ -57,9 +64,16 @@ public class BayesQueryHandler {
                 Element definitionElement = (Element) definitionList.item(i);
                 String forVar = definitionElement.getElementsByTagName("FOR").item(0).getTextContent();
                 NodeList givenList = definitionElement.getElementsByTagName("GIVEN");
-                List<String> givenVars = new ArrayList<>();
+                List<String> givenVarNames = new ArrayList<>();
+                List<Variable> givenVars = new ArrayList<>();
                 for (int j = 0; j < givenList.getLength(); j++) {
-                    givenVars.add(givenList.item(j).getTextContent());
+                    String varName = givenList.item(j).getTextContent();
+                    givenVarNames.add(varName);
+                    Optional<Variable> varNameObj = network.variables.stream().filter(v -> v.name.equals(varName)).findFirst();
+                    if (varNameObj.isEmpty()) {
+                        throw new Exception("Variable not found: " + forVar);
+                    }
+                    givenVars.add(varNameObj.get());
                 }
                 String tableStr = definitionElement.getElementsByTagName("TABLE").item(0).getTextContent();
                 List<Double> tableValues = new ArrayList<>();
@@ -67,23 +81,33 @@ public class BayesQueryHandler {
                     tableValues.add(Double.parseDouble(value));
                 }
                 Factor factor = new Factor();
-                factor.given = givenVars;
+                factor.given = givenVarNames;
                 factor.table = new HashMap<>();
-                factor.variables = new ArrayList<>(givenVars);
-                factor.variables.addLast(forVar);
+
+                Optional<Variable> forVarObj = network.variables.stream().filter(v -> v.name.equals(forVar)).findFirst();;
+                if (forVarObj.isEmpty()) {
+                    throw new Exception("Variable not found: " + forVar);
+                }
+                if (givenVars.isEmpty()) {
+                    factor.variables = new ArrayList<>();
+                } else {
+                    factor.variables = new ArrayList<>(givenVars);
+                }
+                factor.variables.addLast(forVarObj.get());
+
                 factor.populateTable(tableValues);
 
                 network.cpts.put(forVar, factor);
             }
 
-        } catch (ParserConfigurationException | SAXException | IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
         return network;
     }
 
     // Method to parse input.txt
-    private void parseInputFile(String inputFilePath) {
+    private void parseInputFile(String inputFilePath) throws RuntimeException {
         try (BufferedReader br = new BufferedReader(new FileReader(inputFilePath))) {
             String line;
             while ((line = br.readLine()) != null) {
@@ -93,18 +117,9 @@ public class BayesQueryHandler {
                     this.bayesianBallQueries.add(line);
                 }
             }
-        } catch (IOException e) {
-            e.printStackTrace();
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
-    }
-
-    // Getters for queries
-    public List<String> getBayesianBallQueries() {
-        return bayesianBallQueries;
-    }
-
-    public List<String> getVariableEliminationQueries() {
-        return variableEliminationQueries;
     }
 
     // Method to handle Bayesian Ball queries

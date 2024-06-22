@@ -2,7 +2,7 @@ import java.util.*;
 
 public class Factor {
     public List<String> given = new ArrayList<>();
-    public List<String> variables; // List of variable names in the factor
+    public List<Variable> variables; // List of variable in the factor
     public Map<LinkedHashMap<String, String>, Double> table; // Table mapping variable assignments to probabilities
     private int numOfAdds;
     private int numOfMultiplies;
@@ -11,18 +11,21 @@ public class Factor {
         this.given = new ArrayList<>(factor.given);
         this.variables = new ArrayList<>(factor.variables);
         this.table = new HashMap<>(factor.table);
-        numOfMultiplies = 0;
+        numOfMultiplies = factor.numOfMultiplies;
+        numOfAdds = factor.numOfAdds;
     }
 
-    public Factor(List<String> variables) {
+    public Factor(List<Variable> variables) {
         this.given = new ArrayList<>();
         this.variables = new ArrayList<>(variables);
         this.table = new HashMap<>();
         numOfMultiplies = 0;
+        numOfAdds = 0;
     }
 
     public Factor() {
         numOfMultiplies = 0;
+        numOfAdds = 0;
     }
 
     void setProbability(LinkedHashMap<String, String> assignment, double probability) {
@@ -31,10 +34,6 @@ public class Factor {
 
     double getProbability(LinkedHashMap<String, String> assignment) {
         return table.getOrDefault(assignment, 0.0);
-    }
-
-    public List<String> getVariables() {
-        return variables;
     }
 
     @Override
@@ -60,16 +59,18 @@ public class Factor {
         // print in the first line the variables separated by 5 whitespaces and the word Probability
         // each following line should contain the combination of boolean values (true or false) separated by 5 whitespaces and the corresponding double value.
         StringBuilder sb = new StringBuilder();
-        sb.append(String.join("    ", variables)).append("    Probability\n");
+        ArrayList<String> vars = new ArrayList<>();
+        for (Variable var : variables) {
+            vars.add(var.name);
+        }
+        sb.append(String.join("    ", vars)).append("    Probability\n");
         for (Map.Entry<LinkedHashMap<String, String>, Double> entry : table.entrySet()) {
             LinkedHashMap<String, String> assignment = entry.getKey();
-
-            String assignmentStr = assignment.entrySet().stream()
-                    .map(e -> e.getValue().equals("true") ? "T    " : "F    ")
-                    .collect(StringBuilder::new, StringBuilder::append, StringBuilder::append)
-                    .toString();
+            for (Map.Entry<String, String> mapKeyValue : assignment.entrySet()) {
+                sb.append(mapKeyValue.getValue()).append("    ");
+            }
             String roundedProb = String.format("%.5f", entry.getValue());
-            sb.append(String.join("", assignmentStr)).append(roundedProb).append("\n");
+            sb.append(roundedProb).append("\n");
         }
         return sb.toString();
     }
@@ -91,11 +92,11 @@ public class Factor {
         Factor f1 = this;
 
         // Identify common and all variables
-        List<String> commonVars = new ArrayList<>(f1.variables);
+        List<Variable> commonVars = new ArrayList<>(f1.variables);
         commonVars.retainAll(f2.variables);
 
-        List<String> allVars = new ArrayList<>(f1.variables);
-        for (String var : f2.variables) {
+        List<Variable> allVars = new ArrayList<>(f1.variables);
+        for (Variable var : f2.variables) {
             if (!allVars.contains(var)) {
                 allVars.add(var);
             }
@@ -141,8 +142,9 @@ public class Factor {
     }
 
     // Check if assignments are consistent over common variables
-    private boolean consistent(LinkedHashMap<String, String> a1, LinkedHashMap<String, String> a2, List<String> commonVars) {
-        for (String var : commonVars) {
+    private boolean consistent(LinkedHashMap<String, String> a1, LinkedHashMap<String, String> a2, List<Variable> commonVars) {
+        for (Variable variable : commonVars) {
+            String var = variable.name;
             if (a1.containsKey(var) && a2.containsKey(var) && !a1.get(var).equals(a2.get(var))) {
                 return false;
             }
@@ -160,8 +162,14 @@ public class Factor {
         System.out.println("Eliminate variable " + variable + " from the factor:\n");
         System.out.println(this);
         // Determine the variables of the new factor
-        ArrayList<String> newVariables = new ArrayList<>(this.variables);
-        newVariables.remove(variable);
+        ArrayList<Variable> newVariables = new ArrayList<>(this.variables);
+        // remove an element from 'newVariables' by name=variable.
+        for (Variable var : this.variables) {
+            if (var.name.equals(variable)) {
+                newVariables.remove(var);
+                break;
+            }
+        }
 
         // Create the resulting factor
         Factor result = new Factor(newVariables);
@@ -193,13 +201,13 @@ public class Factor {
         Factor resultFactor = new Factor(this.variables);
         // remove the column "givenName" from the list of variables, if there are more than one variable.
         if (this.variables.size() > 1) {
-            resultFactor.variables.remove(givenName);
+            resultFactor.variables.removeIf(var -> var.name.equals(givenName));
         }
 
         // create a key of the map "table" to remove
         LinkedHashMap<String, String> queryAssignment = new LinkedHashMap<>();
-        String queryVar = givenValue.equals("T") ? "true" : "false";
-        queryAssignment.put(givenName, queryVar);
+        // String queryVar = givenValue.equals("T") ? "true" : "false";
+        queryAssignment.put(givenName, givenValue);
 
         for (LinkedHashMap<String, String> assignment : this.table.keySet()) {
             if (assignment.entrySet().containsAll(queryAssignment.entrySet())) {
@@ -239,23 +247,31 @@ public class Factor {
             // We have a complete combination
             LinkedHashMap<String, String> assignment = new LinkedHashMap<>();
             for (int i = 0; i < this.variables.size(); i++) {
-                assignment.put(this.variables.get(i), current.get(i));
+                assignment.put(this.variables.get(i).name, current.get(i));
             }
             this.setProbability(assignment, tableValues.get(this.table.size()));
         } else {
+            // Get possible outcomes for the current variable and
             // Recursively generate combinations for the remaining variables
-            current.add("true");
-            generateCombinations(tableValues, current, index + 1);
-            current.set(index, "false");
-            generateCombinations(tableValues, current, index + 1);
+            Variable variable = this.variables.get(index);
+            int i = 0;
+            for (String outcome : variable.outcomes) {
+                if (i == 0) {
+                    current.add(outcome);
+                } else {
+                    current.set(index, outcome);
+                }
+                generateCombinations(tableValues, current, index + 1);
+                i++;
+            }
             current.remove(index);
         }
     }
 
     public double getProbability(String givenName, String givenValue) {
         LinkedHashMap<String, String> assignment = new LinkedHashMap<>();
-        String queryVar = givenValue.equals("T") ? "true" : "false";
-        assignment.put(givenName, queryVar);
+        // String queryVar = givenValue.equals("T") ? "true" : "false";
+        assignment.put(givenName, givenValue);
 
         return getProbability(assignment);
     }
@@ -263,8 +279,8 @@ public class Factor {
     public int getTotalVarsAsciiCodes() {
         // calculate the ascii code value of all the variables in the factor and return.
         int total = 0;
-        for (String var : this.variables) {
-            for (char c : var.toCharArray()) {
+        for (Variable var : this.variables) {
+            for (char c : var.name.toCharArray()) {
                 total += c;
             }
         }

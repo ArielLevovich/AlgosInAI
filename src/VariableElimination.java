@@ -1,7 +1,7 @@
 import java.util.*;
 
 public class VariableElimination {
-    private BayesNet network;
+    private final BayesNet network;
     int numOfMultiplies; // we use it as a data member, to prevent passing it as a parameter from one method to another.
 
     public VariableElimination(BayesNet network) {
@@ -39,7 +39,7 @@ public class VariableElimination {
         }
 
         // Parse variables to eliminate
-        if (queryParts.length > 1 && queryParts[2].contains("-")) {
+        if (queryParts.length > 2) {
             String[] eliminationPart = queryParts[2].split("\\s+-\\s+");
             if (eliminationPart.length >= 1) {
                 String[] toEliminate = eliminationPart[0].split("-");
@@ -76,7 +76,7 @@ public class VariableElimination {
             String givenName = givenNames.get(i);
             String givenValue = givenValues.get(i);
             for (Factor factor : factorVec) {
-                if (factor.getVariables().contains(givenName)) {
+                if (factor.variables.stream().anyMatch(var -> var.name.equals(givenName))) {
                     factorsToRemove.add(factor);
                     Factor newFactor = factor.removeEvidence(givenName, givenValue);
                     factorsToAdd.add(newFactor);
@@ -90,9 +90,9 @@ public class VariableElimination {
 
         // Process each variable to eliminate
         while (!varsToEliminate.isEmpty()) {
-            String varToEliminate = varsToEliminate.remove(0);
-            // if the variable to eliminate is not in the relevant variables, skip it.
-            if (factorVec.stream().noneMatch(factor -> factor.variables.contains(varToEliminate))) {
+            String varToEliminate = varsToEliminate.removeFirst();
+            // if the variable 'varToEliminate' is not in the relevant variables, skip it.
+            if (factorVec.stream().noneMatch(factor -> factor.variables.stream().anyMatch(var -> var.name.equals(varToEliminate)))) {
                 continue;
             }
 
@@ -102,7 +102,7 @@ public class VariableElimination {
             while (iterator.hasNext()) {
                 Factor factor = iterator.next();
                 // Check if the variable to eliminate is either the key variable or in the given list of the CPT
-                if (factor.variables.contains(varToEliminate)) {
+                if (factor.variables.stream().anyMatch(var -> var.name.equals(varToEliminate))) {
                     factorsToProceed.add(factor);
                     iterator.remove();
                 }
@@ -126,6 +126,17 @@ public class VariableElimination {
 
         // join the remaining factors
         Factor finalFactor = Join(factorVec);
+
+        // if there are more variables in the final factor than the query variable, eliminate them.
+        if (finalFactor.variables.size() > 1) {
+            for (Variable var : finalFactor.variables) {
+                if (!var.name.equals(queryName)) {
+                    finalFactor = finalFactor.Eliminate(var.name);
+                    numOfAdds += finalFactor.getTableSize();
+                }
+            }
+        }
+
         System.out.println("Before normalize: the final factor is:\n");
         System.out.println(finalFactor + "\n");
         // normalize the final factor
