@@ -4,7 +4,7 @@ public class Ex1 {
     public static void main(String[] args) {
         try {
             // args[1] should be the input text file if specified.
-            String inputFile = args.length > 1 ? args[1] : "input.txt";
+            String inputFile = args.length > 0 ? args[0] : "input.txt";
             BayesQueryHandler bayesQueryHandler = new BayesQueryHandler(inputFile);
 
             bayesQueryHandler.handleBayesianBallQueries();
